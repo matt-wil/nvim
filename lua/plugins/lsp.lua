@@ -1,38 +1,46 @@
--- This is the complete configuration file with the updated nvim-lspconfig setup.
+-- lua/plugins/lsp.lua
 
 return {
-	-- Installs LSP servers, formatters, and linters
-	{
-	    "williamboman/mason.nvim",
-		opts = {
-            -- This is the list of ALL tools to install with Mason.
-            -- Includes LSPs, linters, and formatters.
-			ensure_installed = {
-				-- LSPs
-				"vtsls",
-				"rust-analyzer",
-				"tailwindcss",
-				"cssls",
-				"terraformls",
-                "html", -- From your previous config
-                "yamlls", -- From your previous config
-                "lua-language-server", -- The package name for lua_ls
+	-- This table contains all the plugins related to LSP functionality
 
-				-- Linters & Formatters
-				"shellcheck",
-				"shfmt",
-                "stylua", -- From your previous config
-                "selene", -- From your previous config
-                "luacheck", -- From your a previous config
-			},
-		},
-	},
-	-- Bridges mason.nvim with nvim-lspconfig for automatic server setup
+	-- Plugin 1: mason.nvim (The installer for LSPs, formatters, etc.)
 	{
-		"williamboman/mason-lspconfig.nvim",
-		opts = {
-			-- This is your list of servers that mason-lspconfig will ensure are installed.
-			ensure_installed = {
+		"williamboman/mason.nvim",
+		config = function()
+			require("mason").setup()
+		end,
+	},
+
+	-- Plugin 2: mason-lspconfig.nvim (The bridge)
+	{ "williamboman/mason-lspconfig.nvim" },
+
+	-- Plugin 3: nvim-lspconfig (The main LSP configuration engine)
+	{
+		"neovim/nvim-lspconfig",
+		dependencies = {
+			"williamboman/mason.nvim",
+			"williamboman/mason-lspconfig.nvim",
+		},
+		config = function()
+			-- This on_attach function runs for each LSP server that attaches to a buffer.
+			local on_attach = function(client, bufnr)
+				-- Your Keymaps
+				vim.keymap.set("n", "K", vim.lsp.buf.hover, { buffer = bufnr, desc = "LSP Hover" })
+				vim.keymap.set("n", "gl", vim.diagnostic.open_float, { buffer = bufnr, desc = "Line Diagnostics" })
+				vim.keymap.set("n", "gd", function()
+					require("telescope.builtin").lsp_definitions({ reuse_win = true })
+				end, { buffer = bufnr, desc = "Goto Definition" })
+				vim.keymap.set("n", "gD", vim.lsp.buf.declaration, { buffer = bufnr, desc = "Go to Declaration" })
+				vim.keymap.set("n", "gr", vim.lsp.buf.references, { buffer = bufnr, desc = "Go to References" })
+				vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, { buffer = bufnr, desc = "Rename Symbol" })
+				vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, { buffer = bufnr, desc = "Code Action" })
+			end
+
+			-- Get capabilities from nvim-cmp
+			local capabilities = require("cmp_nvim_lsp").default_capabilities()
+
+			-- The list of servers to set up
+			local servers = {
 				"lua_ls",
 				"rust_analyzer",
 				"vtsls",
@@ -40,132 +48,29 @@ return {
 				"cssls",
 				"html",
 				"yamlls",
-				"vtsls",
 				"terraformls",
-			},
-		},
-	},
-
-	-- The main LSP configuration
-	{
-		"neovim/nvim-lspconfig",
-		dependencies = {
-			"williamboman/mason.nvim",
-			"williamboman/mason-lspconfig.nvim",
-		},
-		-- This config function is updated to use the new vim.lsp.config API.
-		config = function()
-			-- This function runs for each LSP server that attaches to a buffer.
-			local on_attach = function(client, bufnr)
-				-- --- Your Custom Keymaps ---
-				vim.keymap.set("n", "K", vim.lsp.buf.hover, { buffer = bufnr, desc = "LSP Hover (Type/Docs)" })
-				vim.keymap.set("n", "gl", vim.diagnostic.open_float, { buffer = bufnr, desc = "Show Line Diagnostics" })
-				vim.keymap.set("n", "gd", function()
-					require("telescope.builtin").lsp_definitions({ reuse_win = false })
-				end, { buffer = bufnr, desc = "Goto Definition (Telescope)" })
-
-				-- --- Other Standard LSP Keymaps ---
-				vim.keymap.set("n", "gD", vim.lsp.buf.declaration, { buffer = bufnr, desc = "Go to Declaration" })
-				vim.keymap.set("n", "gr", vim.lsp.buf.references, { buffer = bufnr, desc = "Go to References" })
-				vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, { buffer = bufnr, desc = "Rename Symbol" })
-				vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, { buffer = bufnr, desc = "Code Action" })
-			end
-
-			-- Standard capabilities for LSP servers.
-			local capabilities = vim.lsp.protocol.make_client_capabilities()
-
-			-- --- Your Custom Server Configurations ---
-			-- A table holding server-specific settings.
-			local servers = {
-				cssls = {},
-				tailwindcss = {},
-				vtsls = {
-					on_attach = function(client, bufnr)
-						on_attach(client, bufnr)
-
-						local root = require("lspconfig.util").root_pattern(".git")(vim.api.nvim_buf_get_name(bufnr))
-						if root and vim.fn.filereadable(root .. "/.prettierrc") > 0 then
-							-- If a prettier config is found, disable the vtsls formatter to prevent conflicts
-							client.server_capabilities.documentFormattingProvider = false
-							client.server_capabilities.documentRangeFormattingProvider = false
-						end
-					end,
-				},
-				html = {},
-				terraformls = {
-					filetypes = { "terraform", "tf", "tfvars" },
-				},
-				yamlls = {
-					settings = {
-						yaml = {
-							keyOrdering = false,
-						},
-					},
-				},
-				lua_ls = {
-					single_file_support = true,
-					settings = {
-						Lua = {
-							workspace = { checkThirdParty = false },
-							completion = { workspaceWord = true, callSnippet = "Both" },
-							hint = {
-								enable = true,
-								setType = false,
-								paramType = true,
-								paramName = "Disable",
-								semicolon = "Disable",
-								arrayIndex = "Disable",
-							},
-							doc = { privateName = { "^_" } },
-							type = { castNumberToInteger = true },
-							diagnostics = {
-								disable = { "incomplete-signature-doc", "trailing-space" },
-								groupSeverity = { strong = "Warning", strict = "Warning" },
-								groupFileStatus = {
-									ambiguity = "Opened",
-									await = "Opened",
-									codestyle = "None",
-									duplicate = "Opened",
-									global = "Opened",
-									luadoc = "Opened",
-									redefined = "Opened",
-									strict = "Opened",
-									strong = "Opened",
-									["type-check"] = "Opened",
-									unbalanced = "Opened",
-									unused = "Opened",
-								},
-								unusedLocalExclude = { "_*" },
-							},
-							format = { enable = false },
-						},
-					},
-				},
 			}
 
-			-- This loop sets up every server with your custom settings.
-			for server_name, server_config in pairs(servers) do
-				-- Merge the server-specific settings with our shared settings
-				local final_config = vim.tbl_deep_extend("force", {
+			-- Your custom server settings (if any)
+			local custom_server_configs = {
+				-- vtsls = { ... },
+			}
+
+			-- THE MODERNIZED SETUP LOOP
+			for _, server_name in ipairs(servers) do
+				-- Get any custom settings for the server
+				local server_opts = custom_server_configs[server_name] or {}
+
+				-- Merge the shared settings with the custom ones
+				local final_opts = vim.tbl_deep_extend("force", {
 					on_attach = on_attach,
 					capabilities = capabilities,
-					inlay_hints = { enabled = false },
-				}, server_config)
+				}, server_opts)
 
-				-- The new way to configure and enable LSPs
-				vim.lsp.config(server_name, final_config)
+				-- This is the NEW, correct API call for Neovim 0.11+
+				vim.lsp.config(server_name, final_opts)
 				vim.lsp.enable(server_name)
 			end
 		end,
-	},
-
-	-- Markview config, correctly configured to be lazy-loaded.
-	{
-		"OXY2DEV/markview.nvim",
-		ft = { "markdown" }, -- Only loads for markdown files
-		dependencies = {
-			"nvim-treesitter/nvim-treesitter",
-			"nvim-tree/nvim-web-devicons",
-		},
 	},
 }
